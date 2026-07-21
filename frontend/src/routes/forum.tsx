@@ -232,7 +232,7 @@ function ForumPage() {
                 <h3 className="mt-4 font-display text-lg font-semibold leading-snug transition group-hover:text-primary">
                   {p.title}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{p.body}</p>
 
                 <div className="mt-5 flex items-center gap-1 border-t border-border/60 pt-4 text-sm text-muted-foreground">
                   <Button
@@ -369,7 +369,7 @@ function CommentSection({ postId }: { postId: number }) {
                   {timeAgo(parseDbDate(c.created_at))}
                 </span>
               </div>
-              <p className="mt-0.5 text-sm leading-relaxed">{c.body}</p>
+              <p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed">{c.body}</p>
             </div>
           </div>
         ))
