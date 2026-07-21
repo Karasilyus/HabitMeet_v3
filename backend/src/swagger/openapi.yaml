@@ -1,0 +1,671 @@
+openapi: 3.0.3
+info:
+  title: HabitMeet API
+  version: 2.0.0
+  description: >
+    Alışkanlık takibi ve semt bazlı eşleşme API'si.
+    Korumalı endpoint'ler "Authorization: Bearer <token>" başlığı gerektirir.
+    Token'ı /api/auth/login veya /api/auth/register yanıtından alıp sağ üstteki
+    "Authorize" butonuna yapıştırarak tüm endpoint'leri buradan deneyebilirsin.
+servers:
+  - url: http://localhost:3000
+    description: Lokal geliştirme
+tags:
+  - name: Auth
+  - name: Habits
+  - name: Matches
+  - name: Messages
+  - name: Forum
+  - name: Misc
+  - name: Admin
+  - name: System
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, example: "Geçersiz istek" }
+    User:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        name: { type: string, example: "Ayşe Yılmaz" }
+        email: { type: string, example: "ayse@demo.habitmeet.local" }
+        neighborhood: { type: string, example: "Kadıköy" }
+        role: { type: string, enum: [user, moderator, admin] }
+        created_at: { type: string, example: "2026-07-20 10:00:00" }
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string, description: JWT }
+        user: { $ref: '#/components/schemas/User' }
+    Habit:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, example: "Sabah koşusu" }
+        type_id: { type: integer, nullable: true }
+        type_name: { type: string, nullable: true, example: "Koşu" }
+        streak: { type: integer, example: 6 }
+        loggedToday: { type: boolean }
+    HabitLog:
+      type: object
+      properties:
+        date: { type: string, example: "2026-07-20" }
+        completed: { type: integer, enum: [0, 1] }
+    Match:
+      type: object
+      properties:
+        id: { type: integer }
+        type_name: { type: string, example: "Koşu" }
+        status: { type: string, enum: [pending, accepted, rejected] }
+        requested_by: { type: integer }
+        other_user_id: { type: integer }
+        other_user_name: { type: string }
+        other_neighborhood: { type: string }
+        unread_count: { type: integer }
+    Message:
+      type: object
+      properties:
+        id: { type: integer }
+        match_id: { type: integer }
+        sender_id: { type: integer }
+        body: { type: string }
+        is_read: { type: integer, enum: [0, 1] }
+        created_at: { type: string }
+    ForumPost:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        author_name: { type: string }
+        type_name: { type: string, nullable: true }
+        title: { type: string }
+        body: { type: string }
+        comment_count: { type: integer }
+        created_at: { type: string }
+  responses:
+    BadRequest:
+      description: Geçersiz istek
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Token yok/geçersiz
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Yetki yok
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Bulunamadı
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+security:
+  - bearerAuth: []
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Kayıt ol (KVKK onayı zorunlu)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, neighborhood, kvkkConsent]
+              properties:
+                name: { type: string, example: "Ayşe Yılmaz" }
+                email: { type: string, example: "ayse@ornek.com" }
+                password: { type: string, example: "Demo1234!", description: "En az 8 karakter, büyük/küçük harf ve rakam" }
+                neighborhood: { type: string, example: "Kadıköy", description: "/api/meta/neighborhoods listesinden" }
+                kvkkConsent: { type: boolean, example: true }
+      responses:
+        '201':
+          description: Kayıt başarılı
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Giriş yap
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: "ayse@demo.habitmeet.local" }
+                password: { type: string, example: "Demo1234!" }
+      responses:
+        '200':
+          description: Giriş başarılı
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Şifre sıfırlama bağlantısı iste (SMTP yoksa konsola yazar)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        '200': { description: "Her durumda aynı yanıt (bilgi sızdırmaz)" }
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Token ile yeni şifre belirle
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Şifre güncellendi }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Oturum sahibinin bilgileri
+      responses:
+        '200':
+          description: Kullanıcı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Auth]
+      summary: Hesabı sil (KVKK - veriler anonimleştirilir)
+      responses:
+        '200': { description: Silindi }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/habits:
+    get:
+      tags: [Habits]
+      summary: Alışkanlıkları listele (streak ve bugün durumu ile)
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Habit' }
+    post:
+      tags: [Habits]
+      summary: Alışkanlık oluştur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Sabah koşusu" }
+                typeId: { type: integer, nullable: true, description: "/api/activity-types listesinden" }
+      responses:
+        '201':
+          description: Oluşturuldu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/habits/{id}:
+    put:
+      tags: [Habits]
+      summary: Alışkanlık güncelle
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                typeId: { type: integer, nullable: true }
+      responses:
+        '200': { description: Güncellendi }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Habits]
+      summary: Alışkanlık sil
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: Silindi }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/habits/{id}/log:
+    post:
+      tags: [Habits]
+      summary: Bugünü tamamlandı işaretle (eşleşme motorunu tetikler)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '201':
+          description: Log + güncel streak + yeni eşleşme sayısı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  log: { $ref: '#/components/schemas/HabitLog' }
+                  streak: { type: integer, example: 4 }
+                  newMatchCount: { type: integer, example: 1 }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/habits/{id}/logs:
+    get:
+      tags: [Habits]
+      summary: Alışkanlığın tüm logları
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200':
+          description: Loglar
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HabitLog' }
+  /api/matches:
+    get:
+      tags: [Matches]
+      summary: Eşleşmelerim (pending/accepted/rejected, okunmamış sayısıyla)
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Match' }
+  /api/matches/{id}/respond:
+    post:
+      tags: [Matches]
+      summary: Gelen eşleşme isteğini kabul/red et
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accept]
+              properties:
+                accept: { type: boolean, example: true }
+      responses:
+        '200': { description: Güncel eşleşme durumu }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/messages/{matchId}:
+    get:
+      tags: [Messages]
+      summary: Sohbet mesajları (karşı tarafın mesajlarını okundu işaretler)
+      parameters: [{ name: matchId, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200':
+          description: Eşleşme + mesajlar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  match: { $ref: '#/components/schemas/Match' }
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/Message' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Messages]
+      summary: Mesaj gönder (yalnızca kabul edilmiş eşleşme, engel yoksa)
+      parameters: [{ name: matchId, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, example: "Yarın sabah koşuya var mısın?" }
+      responses:
+        '201':
+          description: Gönderildi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/forum:
+    get:
+      tags: [Forum]
+      summary: Forum ilanları (?typeId= ile filtre)
+      parameters:
+        - { name: typeId, in: query, required: false, schema: { type: integer } }
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ForumPost' }
+    post:
+      tags: [Forum]
+      summary: İlan oluştur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, body]
+              properties:
+                title: { type: string, example: "Cumartesi sabahı Kalamış koşusu" }
+                body: { type: string, example: "08:00'de park girişinde buluşuyoruz." }
+                typeId: { type: integer, nullable: true }
+      responses:
+        '201':
+          description: Oluşturuldu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ForumPost' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/forum/{id}:
+    put:
+      tags: [Forum]
+      summary: İlanı güncelle (sahibi veya admin/moderatör)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                body: { type: string }
+                typeId: { type: integer, nullable: true }
+      responses:
+        '200': { description: Güncellendi }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Forum]
+      summary: İlanı sil (sahibi veya admin/moderatör)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: Silindi }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/forum/{id}/comments:
+    get:
+      tags: [Forum]
+      summary: İlan yorumları
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: Liste }
+    post:
+      tags: [Forum]
+      summary: Yorum ekle
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, example: "Ben varım! 🙌" }
+      responses:
+        '201': { description: Oluşturuldu }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/activity-types:
+    get:
+      tags: [Misc]
+      summary: Görünür aktivite tipleri (onaylılar + kendi önerilerin)
+      responses:
+        '200': { description: Liste }
+    post:
+      tags: [Misc]
+      summary: Yeni tip öner (admin onayı bekler)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Kaya Tırmanışı" }
+      responses:
+        '201': { description: Oluşturuldu (onay bekliyor) }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/sleep:
+    get:
+      tags: [Misc]
+      summary: Uyku logları (son 30)
+      responses:
+        '200': { description: Liste }
+    post:
+      tags: [Misc]
+      summary: Uyku logu ekle/güncelle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, hours]
+              properties:
+                date: { type: string, example: "2026-07-20" }
+                hours: { type: number, example: 7.5 }
+      responses:
+        '201': { description: Kaydedildi }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/stats:
+    get:
+      tags: [Misc]
+      summary: Kullanıcı istatistikleri
+      responses:
+        '200':
+          description: İstatistikler
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalHabits: { type: integer }
+                  totalCompletedLogs: { type: integer }
+                  acceptedMatches: { type: integer }
+                  bestCurrentStreak: { type: integer }
+  /api/reports:
+    post:
+      tags: [Misc]
+      summary: İçerik/kullanıcı şikayeti oluştur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType, targetId, reason]
+              properties:
+                targetType: { type: string, enum: [user, forum_post, forum_comment, message] }
+                targetId: { type: integer }
+                reason: { type: string, minLength: 5, example: "Uygunsuz içerik paylaşıyor" }
+      responses:
+        '201': { description: Alındı }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/blocks:
+    get:
+      tags: [Misc]
+      summary: Engellediklerim
+      responses:
+        '200': { description: Liste }
+    post:
+      tags: [Misc]
+      summary: Kullanıcı engelle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: integer }
+      responses:
+        '200': { description: Engellendi }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/blocks/{userId}:
+    delete:
+      tags: [Misc]
+      summary: Engeli kaldır
+      parameters: [{ name: userId, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: Kaldırıldı }
+  /api/meta/neighborhoods:
+    get:
+      tags: [Misc]
+      summary: İlçe listesi (public)
+      security: []
+      responses:
+        '200':
+          description: 39 İstanbul ilçesi
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string, example: "Kadıköy" }
+  /api/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Admin dashboard istatistikleri (admin)
+      responses:
+        '200': { description: İstatistikler }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: Kullanıcı listesi (admin/moderatör)
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: page, in: query, required: false, schema: { type: integer, default: 1 } }
+      responses:
+        '200': { description: Liste }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/users/{id}/ban:
+    post:
+      tags: [Admin]
+      summary: Kullanıcıyı askıya al (admin/moderatör)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Askıya alındı }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/users/{id}/unban:
+    post:
+      tags: [Admin]
+      summary: Askıyı kaldır (admin/moderatör)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: Kaldırıldı }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/reports:
+    get:
+      tags: [Admin]
+      summary: Şikayet kuyruğu (admin/moderatör)
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, resolved, dismissed] } }
+      responses:
+        '200': { description: Liste }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/reports/{id}/resolve:
+    post:
+      tags: [Admin]
+      summary: Şikayeti sonuçlandır (admin/moderatör)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [resolved, dismissed] }
+      responses:
+        '200': { description: Güncellendi }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/activity-types/pending:
+    get:
+      tags: [Admin]
+      summary: Onay bekleyen aktivite tipleri (admin)
+      responses:
+        '200': { description: Liste }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/activity-types/{id}/approve:
+    post:
+      tags: [Admin]
+      summary: Aktivite tipini onayla (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: Onaylandı }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/logs:
+    get:
+      tags: [Admin]
+      summary: Admin audit log (admin)
+      responses:
+        '200': { description: Liste }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /health:
+    get:
+      tags: [System]
+      summary: Sağlık kontrolü (DB dahil)
+      security: []
+      responses:
+        '200': { description: OK }
+        '500': { description: DB erişilemiyor }
