@@ -288,9 +288,7 @@ function LoginPage() {
           </div>
         </Card>
 
-        <p className="mt-5 text-center text-[11px] text-muted-foreground">
-          Demo hesap: ayse@demo.habitmeet.local · şifre: Demo1234!
-        </p>
+       
       </div>
     </div>
   );
