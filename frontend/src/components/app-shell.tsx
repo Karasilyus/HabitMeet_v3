@@ -82,7 +82,7 @@ function AppSidebar() {
   ).length;
   const unread = matches
     .filter((m) => m.status === "accepted")
-    .reduce((sum, m) => sum + (m.unread_count ?? 0), 0);
+    .reduce((sum, m) => sum + Number(m.unread_count ?? 0), 0);
 
   const badgeFor = (url: string) =>
     url === "/matches" ? pendingIncoming : url === "/messages" ? unread : 0;
