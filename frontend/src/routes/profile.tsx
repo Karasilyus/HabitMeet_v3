@@ -20,8 +20,17 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   api,
   clearSession,
+  getToken,
+  setSession,
   initialsOf,
   parseDbDate,
   type BlockedUser,
@@ -29,6 +38,7 @@ import {
   type HabitLog,
   type SleepLog,
   type Stats,
+  type User,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { iconFor } from "@/lib/habit-icons";
@@ -44,7 +54,8 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user } = useAuth();
+  const [authVer, setAuthVer] = useState(0);
+  const { user } = useAuth(authVer);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [sleepHours, setSleepHours] = useState("");
@@ -57,6 +68,30 @@ function ProfilePage() {
     queryFn: () => api<BlockedUser[]>("/api/blocks"),
   });
 
+  // Semt değişikliği
+  const [hood, setHood] = useState("");
+  const hoodsQ = useQuery({
+    queryKey: ["neighborhoods"],
+    queryFn: () => api<string[]>("/api/meta/neighborhoods"),
+  });
+  const updateHood = useMutation({
+    mutationFn: () =>
+      api<{ user: User }>("/api/auth/me", {
+        method: "PUT",
+        body: { neighborhood: hood },
+      }),
+    onSuccess: (r) => {
+      setSession(getToken()!, r.user);
+      setAuthVer((v) => v + 1);
+      setHood("");
+      toast.success(
+        `Semtin güncellendi: ${r.user.neighborhood}. Yeni eşleşmeler bu ilçeden önerilecek.`,
+      );
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const habits = habitsQ.data ?? [];
   const habitKey = habits.map((h) => h.id).join("-");
 
@@ -66,10 +101,10 @@ function ProfilePage() {
     enabled: habits.length > 0,
     queryFn: async () => {
       const all = await Promise.all(
-        habits.map((h) => api<HabitLog[]>(`/api/habits/${h.id}/logs`)),
+        habits.map((h) => api<{ logs: HabitLog[] }>(`/api/habits/${h.id}/logs`)),
       );
       const counts = new Map<string, number>();
-      for (const logs of all) {
+      for (const { logs } of all) {
         for (const l of logs) {
           if (l.completed === 1 || (l.completed as unknown) === true) {
             counts.set(l.date, (counts.get(l.date) ?? 0) + 1);
@@ -186,6 +221,29 @@ function ProfilePage() {
           </div>
 
           <p className="mt-4 max-w-xl text-sm text-muted-foreground">{user?.email}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Semtini değiştir:</span>
+            <Select value={hood} onValueChange={setHood}>
+              <SelectTrigger className="h-9 w-52 rounded-full">
+                <SelectValue placeholder={user?.neighborhood ?? "İlçe seç"} />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {(hoodsQ.data ?? []).map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="rounded-full"
+              disabled={!hood || hood === user?.neighborhood || updateHood.isPending}
+              onClick={() => updateHood.mutate()}
+            >
+              Kaydet
+            </Button>
+          </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat label="Aktif seri" value={String(best)} hint="gün" />

@@ -39,6 +39,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const { token: resetToken } = Route.useSearch();
   const [mode, setMode] = useState<Mode>(resetToken ? "reset" : "login");
+  const [directToken, setDirectToken] = useState<string | undefined>(undefined);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -78,12 +79,19 @@ function LoginPage() {
 
   const forgot = useMutation({
     mutationFn: () =>
-      api<{ message: string }>("/api/auth/forgot-password", {
+      api<{ message: string; resetToken?: string }>("/api/auth/forgot-password", {
         method: "POST",
         body: { email },
       }),
-    onSuccess: () => {
-      toast.success("Eğer bu e-posta kayıtlıysa sıfırlama bağlantısı gönderildi.");
+    onSuccess: (r) => {
+      if (r.resetToken) {
+        setDirectToken(r.resetToken);
+        setPassword("");
+        setMode("reset");
+        toast.success("Şimdi yeni şifreni belirleyebilirsin.");
+        return;
+      }
+      toast.success(r.message);
       setMode("login");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -93,7 +101,7 @@ function LoginPage() {
     mutationFn: () =>
       api<{ message: string }>("/api/auth/reset-password", {
         method: "POST",
-        body: { token: resetToken, password },
+        body: { token: resetToken ?? directToken, password },
       }),
     onSuccess: () => {
       toast.success("Şifren güncellendi. Şimdi giriş yapabilirsin.");
@@ -231,9 +239,9 @@ function LoginPage() {
                     className="mt-0.5"
                   />
                   <span>
-                    Kişisel verilerimin KVKK kapsamında, eşleşme ve topluluk
-                    özellikleri için işlenmesini kabul ediyorum. Hesabımı istediğim an
-                    silebileceğimi biliyorum.
+                    Kişisel verilerimin{" "}
+              <a href="/kvkk" target="_blank" rel="noreferrer" className="font-medium text-primary underline">KVKK aydınlatma metni</a>{" "}
+              kapsamında, eşleşme ve topluluk özellikleri için işlenmesini kabul ediyorum. Hesabımı istediğim an silebileceğimi biliyorum.
                   </span>
                 </label>
               </>

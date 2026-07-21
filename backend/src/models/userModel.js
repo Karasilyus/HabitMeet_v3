@@ -48,4 +48,24 @@ async function list({ search = '', limit = 20, offset = 0 }) {
   );
 }
 
-module.exports = { create, findByEmail, findById, setPassword, setBan, softDelete, list };
+// Ad ve/veya ilçe alanlarını dinamik olarak günceller.
+async function updateProfile(id, { name, neighborhood }) {
+  const sets = [];
+  const params = [];
+  if (name !== undefined) {
+    params.push(name);
+    sets.push(`name = $${params.length}`);
+  }
+  if (neighborhood !== undefined) {
+    params.push(neighborhood);
+    sets.push(`neighborhood = $${params.length}`);
+  }
+  params.push(id);
+  const rows = await db.query(
+    `UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+    params
+  );
+  return rows[0];
+}
+
+module.exports = { create, findByEmail, findById, setPassword, setBan, softDelete, list, updateProfile };

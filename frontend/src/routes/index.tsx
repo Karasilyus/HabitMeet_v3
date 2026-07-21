@@ -67,10 +67,10 @@ function TodayPage() {
     enabled: habits.length > 0,
     queryFn: async () => {
       const all = await Promise.all(
-        habits.map((h) => api<HabitLog[]>(`/api/habits/${h.id}/logs`)),
+        habits.map((h) => api<{ logs: HabitLog[] }>(`/api/habits/${h.id}/logs`)),
       );
       const counts = new Map<string, number>();
-      for (const logs of all) {
+      for (const { logs } of all) {
         for (const l of logs) {
           if (l.completed === 1 || (l.completed as unknown) === true) {
             counts.set(l.date, (counts.get(l.date) ?? 0) + 1);

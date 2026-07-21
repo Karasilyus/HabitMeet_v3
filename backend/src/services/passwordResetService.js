@@ -6,14 +6,21 @@ const { sendMail } = require('./emailService');
 const { validatePassword } = require('./authService');
 const httpError = require('../utils/httpError');
 
-// Güvenlik: e-posta kayıtlı olsa da olmasa da aynı yanıt döner (enumeration engeli).
+// SMTP yapılandırılmamışsa sıfırlama token'ı doğrudan yanıtta döner: kullanıcı
+// e-posta beklemeden yeni şifre ekranına yönlendirilir.
+// UYARI: Bu mod e-posta sahipliğini DOĞRULAMAZ; canlı ortamda SMTP_* ortam
+// değişkenlerini ayarlayın — ayarlandığı anda otomatik olarak güvenli
+// e-posta bağlantısı akışına geçilir.
 async function requestReset(email) {
   const user = await userModel.findByEmail(email || '');
   if (user && !user.deleted_at) {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 saat
     await passwordResetModel.create(user.id, token, expiresAt);
-    const link = `${process.env.FRONTEND_URL || 'http://localhost:5500'}/#/reset?token=${token}`;
+    if (!process.env.SMTP_HOST) {
+      return { message: 'Yeni şifreni hemen belirleyebilirsin.', resetToken: token };
+    }
+    const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?token=${token}`;
     await sendMail({
       to: user.email,
       subject: 'HabitMeet - Şifre Sıfırlama',

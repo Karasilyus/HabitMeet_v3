@@ -56,27 +56,30 @@ function HabitsPage() {
   const habits = habitsQ.data ?? [];
   const habitKey = habits.map((h) => h.id).join("-");
 
-  // Son 7 günde her alışkanlık için tamamlanan gün sayısı
+  // Son 7 gün: her alışkanlık için gün gün tamamlanma durumu (bugün dahil)
+  const last7Days = Array.from({ length: 7 }, (_, idx) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - idx));
+    return d.toISOString().slice(0, 10);
+  });
+  const dayLabels = last7Days.map((day) =>
+    new Date(`${day}T12:00:00`).toLocaleDateString("tr-TR", { weekday: "short" }),
+  );
   const weekQ = useQuery({
     queryKey: ["habitWeek", habitKey],
     enabled: habits.length > 0,
     queryFn: async () => {
-      const last7 = new Set<string>();
-      for (let i = 0; i < 7; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        last7.add(d.toISOString().slice(0, 10));
-      }
-      const result: Record<number, number> = {};
       const all = await Promise.all(
-        habits.map((h) => api<HabitLog[]>(`/api/habits/${h.id}/logs`)),
+        habits.map((h) => api<{ logs: HabitLog[] }>(`/api/habits/${h.id}/logs`)),
       );
-      habits.forEach((h, idx) => {
-        result[h.id] = all[idx].filter(
-          (l) => last7.has(l.date) && (l.completed === 1 || (l.completed as unknown) === true),
-        ).length;
+      const map: Record<number, boolean[]> = {};
+      habits.forEach((h, i) => {
+        const doneSet = new Set(
+          all[i].logs.filter((l) => l.completed).map((l) => l.date),
+        );
+        map[h.id] = last7Days.map((day) => doneSet.has(day));
       });
-      return result;
+      return map;
     },
   });
 
@@ -245,7 +248,8 @@ function HabitsPage() {
         <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {habits.map((h) => {
             const Icon = iconFor(h.type_name ?? h.name);
-            const week = weekQ.data?.[h.id] ?? 0;
+            const weekDays = weekQ.data?.[h.id] ?? Array.from({ length: 7 }, () => false);
+            const week = weekDays.filter(Boolean).length;
             return (
               <Card
                 key={h.id}
@@ -268,11 +272,14 @@ function HabitsPage() {
                 </div>
 
                 <div className="mt-4 flex gap-1">
-                  {Array.from({ length: 7 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-8 flex-1 rounded-md ${i < week ? "bg-primary" : "bg-secondary"}`}
-                    />
+                  {last7Days.map((day, i) => (
+                    <div key={day} className="flex flex-1 flex-col items-center gap-1">
+                      <div
+                        className={`h-8 w-full rounded-md ${weekDays[i] ? "bg-primary" : "bg-secondary"} ${i === 6 ? "ring-1 ring-primary/40" : ""}`}
+                        title={day}
+                      />
+                      <span className="text-[10px] text-muted-foreground">{dayLabels[i]}</span>
+                    </div>
                   ))}
                 </div>
                 <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">

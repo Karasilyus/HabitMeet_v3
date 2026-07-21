@@ -20,6 +20,9 @@ function validatePassword(password) {
   if (typeof password !== 'string' || password.length < 8) {
     throw httpError(400, 'Şifre en az 8 karakter olmalıdır.');
   }
+  if (!/[a-zçğıöşü]/.test(password) || !/[A-ZÇĞİÖŞÜ]/.test(password) || !/\d/.test(password)) {
+    throw httpError(400, 'Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermelidir.');
+  }
 }
 
 function validateRegisterInput({ name, email, password, neighborhood }) {
@@ -73,6 +76,35 @@ async function login({ email, password }) {
   return { token: signToken(user), user: publicUser(user) };
 }
 
+// Profil güncelleme: ad ve/veya ilçe (semt) değişikliği.
+async function updateProfile(userId, { name, neighborhood }) {
+  const updates = {};
+  if (name !== undefined) {
+    const clean = sanitizeInput(name);
+    if (!clean || clean.length < 2) throw httpError(400, 'İsim en az 2 karakter olmalıdır.');
+    updates.name = clean;
+  }
+  if (neighborhood !== undefined) {
+    if (!isValidNeighborhood(neighborhood)) throw httpError(400, 'Geçerli bir ilçe seçmelisin.');
+    updates.neighborhood = neighborhood;
+  }
+  if (Object.keys(updates).length === 0) throw httpError(400, 'Güncellenecek bir alan gönderilmedi.');
+  const user = await userModel.updateProfile(userId, updates);
+  return { user: publicUser(user) };
+}
+
+// Şifre değiştirme: mevcut şifre doğrulanır, yeni şifre kurallardan geçirilir.
+async function changePassword(userId, { currentPassword, newPassword }) {
+  const user = await userModel.findById(userId);
+  if (!user) throw httpError(404, 'Kullanıcı bulunamadı.');
+  const ok = await bcrypt.compare(currentPassword || '', user.password_hash);
+  if (!ok) throw httpError(400, 'Mevcut şifren hatalı.');
+  validatePassword(newPassword);
+  const hash = await bcrypt.hash(newPassword, 10);
+  await userModel.setPassword(userId, hash);
+  return { message: 'Şifren güncellendi.' };
+}
+
 // KVKK: hesap ve kişisel verilerin silinmesi.
 async function deleteAccount(userId) {
   await userModel.softDelete(userId);
@@ -99,4 +131,5 @@ async function seedAdmin() {
 module.exports = {
   sanitizeInput, validatePassword, validateRegisterInput,
   register, login, deleteAccount, seedAdmin, publicUser,
+  updateProfile, changePassword,
 };

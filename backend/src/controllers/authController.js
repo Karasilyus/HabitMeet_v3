@@ -23,6 +23,16 @@ exports.me = async (req, res) => {
   res.json({ user: req.user });
 };
 
+// Profil güncelleme (ad / ilçe).
+exports.updateMe = async (req, res) => {
+  res.json(await authService.updateProfile(req.user.id, req.body || {}));
+};
+
+// Şifre değiştirme (giriş yapmış kullanıcı).
+exports.changePassword = async (req, res) => {
+  res.json(await authService.changePassword(req.user.id, req.body || {}));
+};
+
 // KVKK: hesap silme hakkı.
 exports.deleteMe = async (req, res) => {
   await authService.deleteAccount(req.user.id);

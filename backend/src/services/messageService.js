@@ -37,4 +37,13 @@ async function send(userId, matchId, body) {
   return messageModel.create(matchId, userId, sanitizeInput(body));
 }
 
-module.exports = { listForMatch, send };
+// Mesaj silme: yalnızca mesajın sahibi kendi mesajını silebilir.
+async function removeMessage(userId, messageId) {
+  const msg = await messageModel.findById(messageId);
+  if (!msg) throw httpError(404, 'Mesaj bulunamadı.');
+  if (msg.sender_id !== userId) throw httpError(403, 'Yalnızca kendi mesajını silebilirsin.');
+  await messageModel.deleteById(messageId);
+  return { message: 'Mesaj silindi.' };
+}
+
+module.exports = { listForMatch, send, removeMessage };

@@ -23,6 +23,7 @@ app.use('/api/habits', require('./src/routes/habitRoutes'));
 app.use('/api/matches', require('./src/routes/matchRoutes'));
 app.use('/api/forum', require('./src/routes/forumRoutes'));
 app.use('/api/messages', require('./src/routes/messageRoutes'));
+app.use('/api/notes', require('./src/routes/noteRoutes'));
 app.use('/api/admin', require('./src/routes/adminRoutes'));
 app.use('/api', require('./src/routes/miscRoutes'));
 

@@ -24,4 +24,13 @@ async function markRead(matchId, readerId) {
   );
 }
 
-module.exports = { listByMatch, create, markRead };
+async function findById(id) {
+  const rows = await db.query('SELECT * FROM messages WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+async function deleteById(id) {
+  await db.query('DELETE FROM messages WHERE id = $1', [id]);
+}
+
+module.exports = { listByMatch, create, markRead, findById, deleteById };

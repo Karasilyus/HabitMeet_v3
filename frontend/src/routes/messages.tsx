@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send, Flag, Ban, Sparkles } from "lucide-react";
+import { Send, Flag, Ban, Sparkles , Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
@@ -97,6 +97,16 @@ function MessagesPage() {
       toast.success("Kullanıcı engellendi.");
       setActive(undefined);
       qc.invalidateQueries({ queryKey: ["matches"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Mesaj silme: yalnızca kendi mesajını silebilir.
+  const delMsg = useMutation({
+    mutationFn: (id: number) => api(`/api/messages/item/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation"] });
+      toast.success("Mesaj silindi.");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -210,7 +220,22 @@ function MessagesPage() {
                 {messages.map((m) => {
                   const mine = m.sender_id === user?.id;
                   return (
-                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      key={m.id}
+                      className={`group flex items-center gap-1.5 ${mine ? "justify-end" : "justify-start"}`}
+                    >
+                      {mine && (
+                        <button
+                          type="button"
+                          title="Mesajı sil"
+                          className="text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100"
+                          onClick={() => {
+                            if (window.confirm("Bu mesaj silinsin mi?")) delMsg.mutate(m.id);
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
                       <div
                         className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
                           mine

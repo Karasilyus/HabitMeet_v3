@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,9 +10,11 @@ import {
   Sparkles,
   Flame,
   LogOut,
-  Plus,
+  NotebookPen,
+  Settings,
   ShieldCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   Sidebar,
@@ -48,7 +50,9 @@ const nav = [
   { title: "Eşleşmeler", url: "/matches", icon: Users },
   { title: "Mesajlar", url: "/messages", icon: MessageCircle },
   { title: "Forum", url: "/forum", icon: MessagesSquare },
+  { title: "Not Defteri", url: "/notes", icon: NotebookPen },
   { title: "Profil", url: "/profile", icon: UserRound },
+  { title: "Ayarlar", url: "/settings", icon: Settings },
 ];
 
 function AppSidebar() {
@@ -82,6 +86,23 @@ function AppSidebar() {
 
   const badgeFor = (url: string) =>
     url === "/matches" ? pendingIncoming : url === "/messages" ? unread : 0;
+
+  // Yeni eşleşme isteği / okunmamış mesaj sayısı arttığında ekrana bildirim düşür.
+  // İlk yüklemede gösterilmez; yalnızca artış anında gösterilir.
+  const prevCounts = useRef<{ pending: number; unread: number } | null>(null);
+  useEffect(() => {
+    if (!matchesQ.data) return;
+    const prev = prevCounts.current;
+    if (prev) {
+      if (pendingIncoming > prev.pending) {
+        toast.info("🤝 Yeni bir eşleşme isteğin var!");
+      }
+      if (unread > prev.unread && !pathname.startsWith("/messages")) {
+        toast.info("💬 Yeni mesajın var.");
+      }
+    }
+    prevCounts.current = { pending: pendingIncoming, unread };
+  }, [matchesQ.data, pendingIncoming, unread, pathname]);
 
   const isStaff = user?.role === "admin" || user?.role === "moderator";
   const items = isStaff
@@ -203,7 +224,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { ready, user } = useAuth(pathname);
   const navigate = useNavigate();
-  const isAuthPage = pathname.startsWith("/login");
+  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/kvkk");
 
   useEffect(() => {
     if (ready && !user && !isAuthPage) {
@@ -211,7 +232,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [ready, user, isAuthPage, navigate]);
 
-  // Giriş sayfası: kenar çubuğu olmadan sade görünüm
+  // Giriş ve KVKK sayfaları: kenar çubuğu olmadan sade görünüm
   if (isAuthPage) {
     return <>{children}</>;
   }
@@ -222,13 +243,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur">
           <SidebarTrigger />
-          <div className="ml-auto">
-            <Button size="sm" className="rounded-full" asChild>
-              <Link to="/habits">
-                <Plus className="mr-1 size-4" /> Yeni alışkanlık
-              </Link>
-            </Button>
-          </div>
         </header>
         {children}
       </SidebarInset>
